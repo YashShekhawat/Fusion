@@ -6,10 +6,14 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/YashShekhawat/fusion/drivers"
 	"github.com/YashShekhawat/fusion/models"
 )
 
-const defaultBaseURL = "https://generativelanguage.googleapis.com"
+const (
+	defaultBaseURL                = "https://generativelanguage.googleapis.com"
+	streamGenerateContentEndpoint = "/v1beta/models/%s:streamGenerateContent?alt=sse"
+)
 
 type Config struct {
 	APIKey     string
@@ -51,6 +55,7 @@ func New(config Config) (*GeminiDriver, error) {
 	}, nil
 }
 
+// normal text generation function
 func (d *GeminiDriver) Generate(ctx context.Context, req models.GenerateRequest) (models.GenerateResponse, error) {
 
 	const generateContentEndpoint = "/v1beta/models/%s:generateContent"
@@ -76,4 +81,30 @@ func (d *GeminiDriver) Generate(ctx context.Context, req models.GenerateRequest)
 
 func (d *GeminiDriver) Name() string {
 	return "gemini"
+}
+
+// streaming function
+func (d *GeminiDriver) GenerateStream(ctx context.Context, req models.GenerateRequest) (drivers.Stream, error) {
+
+	// Build the provider request.
+	geminiReq := buildGeminiRequest(req)
+
+	// Build the streaming endpoint.
+	endpoint := fmt.Sprintf(
+		streamGenerateContentEndpoint,
+		req.Model,
+	)
+
+	// Open the streaming HTTP connection.
+	body, err := d.sendStreamRequest(
+		ctx,
+		endpoint,
+		geminiReq,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Return the stream.
+	return newGeminiStream(body), nil
 }

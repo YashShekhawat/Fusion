@@ -1,6 +1,6 @@
 package models
 
 type GenerateRequest struct {
-	Model string
+	Model    string
 	Messages []Message
 }

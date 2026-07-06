@@ -20,4 +20,7 @@ var (
 	// Generic Errors
 	ErrInvalidRequest = errors.New("invalid request")
 	ErrInvalidResponse = errors.New("invalid response")
+
+	//streaming error
+	ErrStreamingNotSupported = errors.New("streaming not supported")
 )

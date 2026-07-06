@@ -7,6 +7,7 @@ import (
 	"github.com/YashShekhawat/fusion/drivers"
 	"github.com/YashShekhawat/fusion/drivers/gemini"
 	"github.com/YashShekhawat/fusion/drivers/openai"
+	fusionerrors "github.com/YashShekhawat/fusion/fusionerrors"
 	"github.com/YashShekhawat/fusion/middleware"
 	"github.com/YashShekhawat/fusion/models"
 	"github.com/YashShekhawat/fusion/registry"
@@ -79,4 +80,27 @@ func (c *Client) registerProvider() error {
 	default:
 		return fmt.Errorf("unsupported provider %q", c.provider)
 	}
+}
+
+func (c *Client) GenerateStream(ctx context.Context, req models.GenerateRequest) (drivers.Stream, error) {
+
+	// Look up the configured driver.
+	d, err := c.registry.Get(string(c.provider))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get driver: %w", err)
+	}
+
+	// Apply middleware.
+	for i := len(c.middlewares) - 1; i >= 0; i-- {
+		d = c.middlewares[i](d)
+	}
+
+	// Check whether the driver supports streaming.
+	streamDriver, ok := d.(drivers.StreamDriver)
+	fmt.Printf("Driver type: %T\n", d)
+	if !ok {
+		return nil, fusionerrors.ErrStreamingNotSupported
+	}
+
+	return streamDriver.GenerateStream(ctx, req)
 }
