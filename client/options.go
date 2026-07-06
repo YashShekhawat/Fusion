@@ -10,3 +10,17 @@ func WithMiddleware(mw ...middleware.Middleware) Option {
 		return nil
 	}
 }
+
+func WithProvider(provider Provider) Option {
+	return func(c *Client) error {
+		c.provider = provider
+		return nil
+	}
+}
+
+func WithAPIKey(apiKey string) Option {
+	return func(c *Client) error {
+		c.apiKey = apiKey
+		return nil
+	}
+}

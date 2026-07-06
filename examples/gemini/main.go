@@ -7,7 +7,6 @@ import (
 	"os"
 
 	"github.com/YashShekhawat/fusion/client"
-	"github.com/YashShekhawat/fusion/drivers/gemini"
 	"github.com/YashShekhawat/fusion/middleware"
 	"github.com/YashShekhawat/fusion/models"
 	"github.com/joho/godotenv"
@@ -15,15 +14,16 @@ import (
 
 func main() {
 	_ = godotenv.Load()
-	// Create Fusion client
+
 	logger := log.New(
 		os.Stdout,
 		"[Fusion] ",
 		log.LstdFlags,
 	)
 
-	// Create Fusion client with logging middleware.
 	fusionClient, err := client.New(
+		client.WithProvider(client.Gemini),
+		client.WithAPIKey(os.Getenv("GEMINI_API_KEY")),
 		client.WithMiddleware(
 			middleware.Logging(logger),
 		),
@@ -32,27 +32,8 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Read them with os.Getenv
-	apiKey := os.Getenv("GEMINI_API_KEY")
-	fmt.Println("API Key:", apiKey)
-
-	// Create Gemini driver
-	geminiDriver, err := gemini.New(gemini.Config{
-		APIKey: apiKey,
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Register the driver
-	if err := fusionClient.Register(geminiDriver); err != nil {
-		log.Fatal(err)
-	}
-
-	// Generate a response
 	resp, err := fusionClient.Generate(
 		context.Background(),
-		"gemini",
 		models.GenerateRequest{
 			Model: "gemini-2.5-flash",
 			Messages: []models.Message{
@@ -71,7 +52,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	fmt.Println("Provider :", geminiDriver.Name())
+	fmt.Println("Provider :", client.ProviderGemini)
 	fmt.Println("Role     :", resp.Message.Role)
 	fmt.Println("Response :", resp.Message.Content)
 	fmt.Printf(
