@@ -1,47 +1,18 @@
 # Fusion
 
-> A provider-agnostic AI SDK for Go.
+Fusion is a provider-agnostic Go SDK for building applications with Large Language Models (LLMs).
 
-Fusion provides a unified interface for working with multiple AI providers. Instead of learning and maintaining different SDKs for OpenAI, Gemini, Anthropic, and others, you write your application once using Fusion and choose the provider through configuration.
-
----
-
-## Why Fusion?
-
-Every AI provider exposes its own SDK, request format, response model, and error handling. Supporting multiple providers often results in duplicated code and vendor lock-in.
-
-Fusion solves this by providing:
-
-* A unified API across AI providers
-* Common request and response models
-* Standardized error handling
-* Provider-independent application code
-* Extensible architecture for adding new providers
-
-Your application interacts with Fusion—not with individual provider SDKs.
-
----
+Instead of writing provider-specific code for every AI service, Fusion provides a single, consistent API that works across multiple providers. Switching providers should require changing configuration—not rewriting your application.
 
 ## Features
 
-* Unified API
-* Provider-agnostic request and response models
-* Standardized error handling
-* Context-aware request execution
-* Middleware support
-* Modular driver architecture
-* Easy provider switching
-* Extensible design
-
-### Planned
-
-* Streaming responses
-* Tool / Function Calling
-* Embeddings
-* Image generation
-* Retry support
-* Logging improvements
-* Additional providers
+* ✅ Provider-agnostic API
+* ✅ Built-in Gemini support
+* ✅ Streaming responses
+* ✅ Middleware support
+* ✅ Canonical error handling
+* ✅ Extensible driver architecture
+* ✅ Simple configuration using functional options
 
 ---
 
@@ -60,7 +31,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 
@@ -69,12 +39,10 @@ import (
 )
 
 func main() {
-
 	fusionClient, err := client.New(
 		client.WithProvider(client.ProviderGemini),
 		client.WithAPIKey(os.Getenv("GEMINI_API_KEY")),
 	)
-
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -91,342 +59,241 @@ func main() {
 			},
 		},
 	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Println(resp.Message.Content)
+}
+```
+
+---
+
+# Streaming
+
+Fusion also supports streaming responses.
+
+```go
+stream, err := fusionClient.GenerateStream(ctx, req)
+if err != nil {
+	log.Fatal(err)
+}
+defer stream.Close()
+
+for {
+	chunk, err := stream.Recv()
+
+	if err == io.EOF {
+		break
+	}
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Println(resp.Message.Content)
+	fmt.Print(chunk.Content)
 }
 ```
 
-Switching providers only requires changing the client configuration.
+`Recv()` blocks until the next chunk is available.
 
-```go
-client.WithProvider(client.ProviderOpenAI)
-```
+When the stream has finished, `Recv()` returns `io.EOF`.
 
-Your application code remains unchanged.
+Always call `Close()` after you're done reading from the stream.
 
 ---
 
-# Supported Providers
+# Configuration
 
-| Provider  | Status |
-| --------- | :----: |
-| OpenAI    |    ✅   |
-| Gemini    |    ✅   |
-| Anthropic |   🚧   |
-| Groq      |   📋   |
-| Ollama    |   📋   |
+Fusion uses functional options to configure the client.
+
+```go
+fusionClient, err := client.New(
+	client.WithProvider(client.ProviderGemini),
+	client.WithAPIKey(os.Getenv("GEMINI_API_KEY")),
+)
+```
+
+### Available Options
+
+#### Provider
+
+```go
+client.WithProvider(client.ProviderGemini)
+```
+
+#### API Key
+
+```go
+client.WithAPIKey(os.Getenv("GEMINI_API_KEY"))
+```
+
+#### Middleware
+
+```go
+client.WithMiddleware(
+	middleware.Logging(logger),
+)
+```
+
+Options can be combined:
+
+```go
+fusionClient, err := client.New(
+	client.WithProvider(client.ProviderGemini),
+	client.WithAPIKey(os.Getenv("GEMINI_API_KEY")),
+	client.WithMiddleware(
+		middleware.Logging(logger),
+	),
+)
+```
+
+---
+
+# Middleware
+
+Fusion supports middleware that wraps provider drivers.
+
+Current middleware includes:
+
+* Logging
+
+Middleware applies to both:
+
+* `Generate()`
+* `GenerateStream()`
+
+Example:
+
+```go
+logger := log.New(os.Stdout, "[Fusion] ", log.LstdFlags)
+
+fusionClient, err := client.New(
+	client.WithProvider(client.ProviderGemini),
+	client.WithAPIKey(os.Getenv("GEMINI_API_KEY")),
+	client.WithMiddleware(
+		middleware.Logging(logger),
+	),
+)
+```
 
 ---
 
 # Project Structure
 
-```text
+```
 fusion/
 ├── client/
 ├── drivers/
 │   ├── gemini/
-│   ├── openai/
-│   └── ...
+│   └── stream.go
+├── fusionerrors/
 ├── middleware/
 ├── models/
 ├── registry/
-├── fusionerrors/
 └── examples/
+    ├── gemini/
+    └── streaming/
 ```
 
 ---
 
 # Architecture
 
-Fusion follows a layered architecture where every component has a single responsibility.
+Fusion follows a provider-agnostic architecture.
 
-```text
+Normal request flow:
+
+```
 Application
-     │
-     ▼
- Client
-     │
-     ▼
- Registry
-     │
-     ▼
- Driver
-     │
- ┌───┼───────────────┐
- │   │               │
- ▼   ▼               ▼
-Request Mapping   Transport   Response Mapping
-     │               │               │
-     └───────────────┴───────────────┘
-                     │
-                     ▼
-               AI Provider
+      │
+      ▼
+Client
+      │
+      ▼
+Middleware
+      │
+      ▼
+Registry
+      │
+      ▼
+Driver
+      │
+      ▼
+Provider
 ```
 
-Each layer focuses on one responsibility, making Fusion easier to maintain, test, and extend.
+Streaming request flow:
 
----
-
-# Package Responsibilities
-
-## client
-
-The public entry point of Fusion.
-
-Applications should only interact with the client.
-
-Responsibilities:
-
-* Configure the selected provider
-* Register the appropriate built-in driver
-* Execute middleware
-* Send requests
-* Return provider-agnostic responses
-
-Example:
-
-```go
-fusionClient, err := client.New(
-	client.WithProvider(client.ProviderGemini),
-	client.WithAPIKey(apiKey),
-)
+```
+Application
+      │
+      ▼
+Client.GenerateStream()
+      │
+      ▼
+Middleware
+      │
+      ▼
+StreamDriver
+      │
+      ▼
+Stream
+      │
+      ▼
+Provider
 ```
 
----
-
-## registry
-
-The registry stores all registered drivers.
-
-Internally it behaves like:
-
-```text
-gemini  -> GeminiDriver
-openai  -> OpenAIDriver
-...
-```
-
-The client retrieves the appropriate driver from the registry instead of containing provider-specific request logic.
-
----
-
-## drivers
-
-Each provider implements the same Driver interface.
-
-Example:
-
-```text
-drivers/
-    gemini/
-    openai/
-    anthropic/
-```
-
-Each driver is independent.
-
-Adding one provider should never require modifying another provider.
-
----
-
-## models
-
-Contains the common request and response structures used across the SDK.
-
-Applications always work with Fusion models instead of provider-specific models.
-
----
-
-## middleware
-
-Middleware wraps drivers to provide reusable functionality such as:
-
-* Logging
-* Metrics
-* Tracing
-* Retry (planned)
-
-without modifying provider implementations.
-
----
-
-## fusionerrors
-
-Fusion converts provider-specific errors into common SDK errors.
-
-Instead of parsing provider messages:
-
-```go
-if strings.Contains(err.Error(), "Incorrect API Key") {
-    ...
-}
-```
-
-Applications can simply write:
-
-```go
-if errors.Is(err, fusionerrors.ErrUnauthorized) {
-    ...
-}
-```
-
-making error handling consistent across providers.
-
----
-
-# Driver Structure
-
-Each provider follows the same structure.
-
-```text
-drivers/
-    provider/
-        driver.go
-        request.go
-        response.go
-        transport.go
-        errors.go
-```
-
-### driver.go
-
-Coordinates the request lifecycle.
-
-Responsibilities:
-
-* Validate input
-* Convert Fusion requests
-* Call transport
-* Convert provider responses
-
----
-
-### request.go
-
-Converts Fusion models into provider-specific request models.
-
----
-
-### response.go
-
-Converts provider responses into Fusion responses.
-
-Applications never parse provider JSON directly.
-
----
-
-### transport.go
-
-Responsible only for communication.
-
-Responsibilities:
-
-* Build HTTP requests
-* Send requests
-* Decode JSON responses
-
-No business logic belongs here.
-
----
-
-### errors.go
-
-Maps provider-specific errors into Fusion errors.
-
-Example:
-
-```text
-401 Unauthorized
-
-↓
-
-fusionerrors.ErrUnauthorized
-```
+Provider-specific request and response formats are isolated inside each driver.
 
 ---
 
 # Design Principles
 
-Fusion follows a few simple principles.
+Fusion is built around a few simple principles:
 
-## Single Responsibility
-
-Every package should have one responsibility.
-
-## Separation of Concerns
-
-| Component | Responsibility         |
-| --------- | ---------------------- |
-| Client    | Public API             |
-| Registry  | Driver lookup          |
-| Driver    | Provider orchestration |
-| Request   | Request mapping        |
-| Transport | HTTP communication     |
-| Response  | Response mapping       |
-| Errors    | Error mapping          |
-
-## Provider Agnostic
-
-Applications should not depend on provider-specific SDKs.
-
-Changing providers should require configuration changes—not application changes.
-
-## Extensibility
-
-Adding a new provider should only require:
-
-1. Creating a new driver.
-2. Registering it.
-3. Done.
-
-Existing providers should not require modification.
+* Applications should use a single public API regardless of the underlying provider.
+* Provider-specific logic belongs inside drivers.
+* Middleware should operate on interfaces instead of concrete implementations.
+* Streaming is an optional driver capability, allowing providers to support it independently.
+* Common concepts such as requests, responses, and errors are normalized across providers.
 
 ---
 
-# Error Handling
+# Examples
 
-Fusion standardizes provider errors.
+The repository includes complete working examples.
 
-Examples include:
-
-* ErrUnauthorized
-* ErrTimeout
-* ErrRateLimit
-* ErrProviderUnavailable
-* ErrInvalidResponse
-
-This allows applications to use idiomatic Go error handling regardless of the selected provider.
-
----
-
-# Adding a New Provider
-
-Every provider should implement the Driver interface.
-
-Recommended structure:
-
-```text
-drivers/
-    provider/
-        driver.go
-        request.go
-        response.go
-        transport.go
-        errors.go
+```
+examples/
+├── gemini/
+└── streaming/
 ```
 
-Steps:
+The Gemini example demonstrates standard text generation.
 
-1. Implement the Driver interface.
-2. Map Fusion requests.
-3. Send requests.
-4. Map responses.
-5. Map provider errors.
-6. Register the driver.
+The streaming example demonstrates incremental response generation using `GenerateStream()`.
+
+---
+
+# Extending Fusion
+
+Fusion is designed to support additional providers without changing the core client.
+
+Advanced users can register custom drivers using:
+
+```go
+client.Register(driver)
+```
+
+This is primarily intended for:
+
+* Custom providers
+* Internal company integrations
+* Testing
+* Community-maintained drivers
+
+Most applications will only need to configure the provider and API key using `client.New()`.
 
 ---
 
@@ -434,54 +301,17 @@ Steps:
 
 Contributions are welcome.
 
-Please follow these guidelines:
+When contributing:
 
-## Do
+* Keep provider-specific logic inside the corresponding driver.
+* Preserve the provider-agnostic public API.
+* Add tests for new functionality.
+* Keep middleware generic so it works across providers.
 
-* Keep packages focused.
-* Follow the existing driver structure.
-* Reuse common models and errors.
-* Keep provider-specific logic inside provider packages.
-* Write clear documentation.
-
-## Don't
-
-* Put HTTP code inside the client.
-* Build provider requests inside transport.
-* Parse responses inside the client.
-* Couple one provider to another.
-* Duplicate logic across providers.
-
----
-
-# Roadmap
-
-* Streaming
-* Tool Calling
-* Embeddings
-* Image Generation
-* Middleware enhancements
-* Retry support
-* More AI providers
-* Additional examples
-* Expanded documentation
-
----
-
-# Guiding Principle
-
-Before adding new code, ask:
-
-> **Does this belong to Fusion, or does it belong to a specific provider?**
-
-If every provider could use it, it probably belongs in Fusion.
-
-If it only applies to one provider, keep it inside that provider's package.
-
-This principle keeps Fusion modular, maintainable, and easy to extend.
+Before opening a pull request, ensure all examples compile and existing tests pass.
 
 ---
 
 # License
 
-Fusion is released under the MIT License.
+MIT License.
