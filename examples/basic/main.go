@@ -16,7 +16,7 @@ func main() {
 
 	fmt.Println("Application: Calling Client.Generate()")
 
-	resp, err := client.Generate(context.TODO(), "mocks", models.GenerateRequest{
+	resp, err := client.Generate(context.TODO(), "mock", models.GenerateRequest{
 		Messages: []models.Message{
 			{
 				Role:    models.RoleUser,
